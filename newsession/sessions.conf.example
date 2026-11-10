@@ -1,0 +1,12 @@
+# sessions.conf: where /newsession can open a session, and under which Claude account.
+# Copy this file to sessions.conf (beside open.sh) and edit it. sessions.conf is never committed.
+
+# Repos: repo <key>[,<alias>...] = <folder>
+# Folders are absolute or start with $HOME/ or ~/. Spaces in a folder are fine; quotes are not needed.
+repo thesis,phd = $HOME/Documents/thesis
+repo website    = $HOME/code/website
+
+# Accounts: account <key> = <command that starts Claude Code>
+# The first account is the default. The command runs in an interactive shell, so a shell alias works too.
+account default = claude
+account work    = CLAUDE_CONFIG_DIR=$HOME/.claude-work claude
