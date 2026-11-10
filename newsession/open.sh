@@ -4,6 +4,7 @@
 #   open.sh <repo> [<account>] [<prompt-file>]
 #   open.sh --list                         print the repos and accounts read from sessions.conf
 #   open.sh --dry-run <repo> [<account>] [<prompt-file>]   print the command the window would run, open nothing
+#   open.sh --keys | --root <repo> | --cmd [<account>]      lookups for the terminal shortcuts (shell/shortcuts.zsh)
 #
 # <repo>         a repo key or alias from sessions.conf, or an absolute folder path. A path inside a listed repo is
 #                moved up to that repo's root, so a session always starts where the project's CLAUDE.md and
@@ -25,12 +26,14 @@ phys()  { (cd "$1" 2>/dev/null && pwd -P) || printf '%s' "$1"; }   # resolve .. 
 REPO_KEYS=(); REPO_DIRS=(); ACCT_KEYS=(); ACCT_CMDS=()
 re='^[[:space:]]*(repo|account)[[:space:]]+([^=[:space:]]+)[[:space:]]*=[[:space:]]*(.*[^[:space:]])[[:space:]]*$'
 skip='^[[:space:]]*(#|$)'
+keyre='^[a-z0-9_][a-z0-9_.-]*(,[a-z0-9_][a-z0-9_.-]*)*$'
 n=0
 while IFS= read -r line || [[ -n $line ]]; do
   n=$((n + 1))
   [[ $line =~ $skip ]] && continue
   [[ $line =~ $re ]] || { echo "sessions.conf line $n: expected 'repo <key> = <folder>' or 'account <key> = <command>'" >&2; exit 2; }
   kind=${BASH_REMATCH[1]}; key=$(lower "${BASH_REMATCH[2]}"); val=${BASH_REMATCH[3]}
+  [[ $key =~ $keyre ]] || { echo "sessions.conf line $n: keys use letters, digits, _ . - (aliases after commas): $key" >&2; exit 2; }
   if [[ $kind == repo ]]; then
     val=${val/#\~/$HOME}; val=${val//\$HOME/$HOME}; val=${val%/}
     [[ $val == /* ]] || { echo "sessions.conf line $n: folder must be absolute or start with \$HOME/ or ~/: $val" >&2; exit 2; }
@@ -41,13 +44,6 @@ while IFS= read -r line || [[ -n $line ]]; do
   fi
 done < "$CONF"
 [[ ${#ACCT_KEYS[@]} -gt 0 ]] || { echo "sessions.conf lists no account; add: account default = claude" >&2; exit 2; }
-
-if [[ ${1-} == --list ]]; then
-  for i in "${!REPO_KEYS[@]}"; do printf 'repo     %-20s %s\n' "${REPO_KEYS[$i]}" "${REPO_DIRS[$i]}"; done
-  for i in "${!ACCT_KEYS[@]}"; do printf 'account  %-20s %s%s\n' "${ACCT_KEYS[$i]}" "${ACCT_CMDS[$i]}" "$([[ $i == 0 ]] && echo '   (default)')"; done
-  exit 0
-fi
-DRY=0; [[ ${1-} == --dry-run ]] && { DRY=1; shift; }
 
 root_of() {  # repo key or path -> folder (a path inside a listed repo snaps to the deepest such repo's root)
   local a="$1" lc i k r rl al best=""
@@ -69,12 +65,28 @@ root_of() {  # repo key or path -> folder (a path inside a listed repo snaps to 
   echo "${a%/}"
 }
 
+cmd_of() {  # account key (empty = the default, listed first) -> its command
+  local want i; want=$(lower "${1:-${ACCT_KEYS[0]}}")
+  for i in "${!ACCT_KEYS[@]}"; do [[ ${ACCT_KEYS[$i]} == "$want" ]] && { echo "${ACCT_CMDS[$i]}"; return; }; done
+  echo "unknown account: $want (listed: ${ACCT_KEYS[*]})" >&2; return 1
+}
+
+# Lookups, used by the terminal shortcuts (shell/shortcuts.zsh) and for checking sessions.conf.
+case ${1-} in
+  --list)
+    for i in "${!REPO_KEYS[@]}"; do printf 'repo     %-20s %s\n' "${REPO_KEYS[$i]}" "${REPO_DIRS[$i]}"; done
+    for i in "${!ACCT_KEYS[@]}"; do printf 'account  %-20s %s%s\n' "${ACCT_KEYS[$i]}" "${ACCT_CMDS[$i]}" "$([[ $i == 0 ]] && echo '   (default)')"; done
+    exit 0 ;;
+  --keys) for k in "${REPO_KEYS[@]}"; do tr ',' '\n' <<< "$k"; done; exit 0 ;;
+  --root) root_of "${2:?usage: open.sh --root <repo>}"; exit ;;
+  --cmd)  cmd_of "${2-}"; exit ;;
+esac
+DRY=0; [[ ${1-} == --dry-run ]] && { DRY=1; shift; }
+
 DIR=$(root_of "${1:?usage: open.sh <repo|folder> [account] [prompt-file]   (open.sh --list shows the choices)}") || exit 2
 [[ -d $DIR ]] || { echo "folder for '$1' does not exist: $DIR" >&2; exit 2; }
-
-ACCT=$(lower "${2:-${ACCT_KEYS[0]}}"); CMD=""
-for i in "${!ACCT_KEYS[@]}"; do [[ ${ACCT_KEYS[$i]} == "$ACCT" ]] && CMD=${ACCT_CMDS[$i]}; done
-[[ -n $CMD ]] || { echo "unknown account: $ACCT (listed: ${ACCT_KEYS[*]})" >&2; exit 2; }
+ACCT=$(lower "${2:-${ACCT_KEYS[0]}}")
+CMD=$(cmd_of "$ACCT") || exit 2
 
 P="${3:-}"
 if [[ -n $P ]]; then

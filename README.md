@@ -1,6 +1,7 @@
 # session-control
 
-Two Claude Code skills that let Claude open and close sessions in separate Terminal windows:
+Two Claude Code skills that let Claude open and close sessions in separate Terminal windows, plus optional
+one-word terminal shortcuts for starting a session yourself:
 
 - **`/newsession`** opens a new Claude Code session in its own Terminal window, in the project you name, under the
   account you name, optionally with a first prompt. Use it to start a fresh session without leaving the one you
@@ -30,8 +31,8 @@ account default = claude
 account work    = CLAUDE_CONFIG_DIR=$HOME/.claude-work claude
 ```
 
-- **Repos:** a short key (plus optional aliases after commas) and the project's folder. Folders are absolute or
-  start with `$HOME/` or `~/`; spaces are fine without quotes.
+- **Repos:** a short key (plus optional aliases after commas) and the project's folder. Keys use letters, digits,
+  `_`, `.` and `-`. Folders are absolute or start with `$HOME/` or `~/`; spaces are fine without quotes.
 - **Accounts:** a short key and the command that starts Claude. The first account is the default. With one
   account, keep only `default`.
 
@@ -77,6 +78,26 @@ Claude Code keeps each account's login, settings and skills in one config folder
 
 A shell alias works in the command column as well. With `alias claude-work='CLAUDE_CONFIG_DIR=$HOME/.claude-work claude'`
 in your shell's startup file, the line can be `account work = claude-work`.
+
+## Terminal shortcuts (optional, zsh)
+
+The same `sessions.conf` can give your own terminal a command per project, so a fresh Terminal window needs one
+word instead of `cd "<long path>" && claude`. Add this line to `~/.zshrc`, after any aliases your account commands
+use, and open a new window:
+
+```zsh
+source ~/session-control/shell/shortcuts.zsh
+```
+
+| You type in Terminal | What happens in that window |
+|---|---|
+| `thesis` | Goes to the `thesis` folder and starts Claude with the default account |
+| `thesis work` | The same, with the `work` account |
+| `thesis work --resume` · `thesis default "fix the build"` | Anything after the account goes to Claude unchanged, a quoted first prompt included |
+
+A word after the project name that is not an account (`thesis wrok`) stops with the list of accounts, so a typo
+never reaches Claude as a prompt. A project key that is already a command in your shell (`ls`, `git`) gets no
+shortcut, and the shell says so when it starts.
 
 ## How it works
 
